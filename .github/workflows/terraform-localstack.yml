@@ -1,43 +1,64 @@
-name: Terraform + LocalStack Working
+name: Terraform LocalStack S3
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
 
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: "s3"
+          DEFAULT_REGION: "us-east-1"
+        options: >-
+          --health-cmd="localstack status services" 
+          --health-interval=5s 
+          --health-timeout=5s 
+          --health-retries=20
+
     env:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: true
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Start LocalStack
-        run: |
-          docker run -d -p 4566:4566 --name localstack localstack/localstack:latest
-          echo "Aguardando LocalStack iniciar..."
-          sleep 10
-          docker logs localstack
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.0
+
+      - name: Check Terraform version
+        run: terraform version
+
+      - name: Wait for LocalStack to be healthy
+        run: |
+          for i in {1..30}; do
+            STATUS=$(docker ps --filter "name=localstack" --format "{{.Status}}")
+            echo "LocalStack status: $STATUS"
+            if [[ "$STATUS" == *"(healthy)"* ]]; then
+              echo "LocalStack is healthy!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "LocalStack did not become healthy in time."
+          exit 1
 
       - name: Terraform Init
         run: terraform init
 
+      - name: Terraform Plan
+        run: terraform plan
+
       - name: Terraform Apply
         run: terraform apply -auto-approve
 
-      - name: List buckets created
-        run: aws --endpoint-url=http://localhost:4566 s3 ls
-
-      - name: Show logs if failure
-        if: failure()
-        run: docker logs localstack
+      - name: List Buckets (Test)
+        run: aws --endpoint-url=http://localstack:4566 s3 ls
