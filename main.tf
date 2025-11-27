@@ -1,3 +1,3 @@
 resource "aws_s3_bucket" "example" {
-  bucket = "meu-bucket-localstack"
+  bucket = var.bucket_name
 }
