@@ -1,4 +1,4 @@
-name: Terraform + LocalStack Example
+name: Terraform + LocalStack
 
 on:
   push:
@@ -17,29 +17,24 @@ jobs:
       localstack:
         image: localstack/localstack:latest
         ports:
-          - 4566:4566
+          - "4566:4566"
         env:
           SERVICES: "s3"
         options: >-
-          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-cmd "curl -f http://localhost:4566/_localstack/health | grep '\"s3\": \"running\"'"
           --health-interval 5s
-          --health-timeout 10s
+          --health-timeout 30s
           --health-retries 10
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Wait for LocalStack to be Ready
+      - name: Confirm S3 is running
         run: |
-          echo "Aguardando LocalStack iniciar..."
-          for i in {1..20}; do
-            if curl -s http://localhost:4566/_localstack/health | grep '"s3": "running"' > /dev/null; then
-              echo "LocalStack disponível!"
-              break
-            fi
-            echo "Aguardando..." && sleep 3
-          done
+          echo "Verificando se o S3 está ativo:"
+          curl -s http://localhost:4566/_localstack/health
+          curl -s http://localhost:4566/_localstack/health | grep '"s3": "running"' || exit 1
 
       - name: Install Terraform
         uses: hashicorp/setup-terraform@v2
@@ -49,13 +44,8 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan
-
       - name: Terraform Apply
         run: terraform apply -auto-approve
 
-      - name: Verify Bucket
-        run: |
-          echo "Listando buckets criados:"
-          aws --endpoint-url=http://localhost:4566 s3 ls
+      - name: List Buckets
+        run: aws --endpoint-url=http://localhost:4566 s3 ls
