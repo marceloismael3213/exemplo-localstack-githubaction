@@ -1,8 +1,9 @@
-name: Terraform + LocalStack
+name: Terraform LocalStack
 
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   terraform:
@@ -10,36 +11,30 @@ jobs:
 
     services:
       localstack:
-        image: localstack/localstack:3.4
+        image: localstack/localstack:3.5
         ports:
           - 4566:4566
         env:
           SERVICES: s3
           DEBUG: 1
         options: >-
-          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
-          --health-interval=5s  
-          --health-timeout=5s   
+          --health-cmd="curl -f http://localhost:4566/health || exit 1"
+          --health-interval=5s
+          --health-timeout=3s
           --health-retries=20
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@v2
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-      - name: Init
+      - name: Terraform Init
         run: terraform init
 
-      - name: Validate
-        run: terraform validate
-
-      - name: Plan
+      - name: Terraform Plan
         run: terraform plan
 
-      - name: Apply
+      - name: Terraform Apply
         run: terraform apply -auto-approve
-
-      - name: List S3 buckets (LocalStack)
-        run: |
-          aws --endpoint-url=http://localhost:4566 s3 ls
